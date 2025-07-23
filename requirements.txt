@@ -1,6 +1,0 @@
-streamlit
-bioservices
-networkx
-matplotlib
-pandas
-adjustText
