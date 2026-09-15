@@ -9,25 +9,25 @@ import base64
 from pathlib import Path
 
 
-# ---------------------------------------------------------
+# -----------------------------------------------------
 # 1. PAGE CONFIGURATION
-# ---------------------------------------------------------
+# -----------------------------------------------------
 
 st.set_page_config(
-    page_title="Pathway Analyzer",
+    page_title="OncoNet Explorer",
     layout="wide"
 )
 
-st.title("🧬 Pathway Analyzer")
+st.title("OncoNet Explorer")
 st.write(
-    "Explore a Super Pathway connecting cancer, natural product, "
-    "and pharmaceutical pathways through shared genes."
+    "Integrated visualization of cancer, natural product, "
+    "and pharmaceutical pathway-gene associations."
 )
 
 
-# ---------------------------------------------------------
-# 2. ICONS
-# ---------------------------------------------------------
+# -----------------------------------------------------
+# 2. ICON & KEGG UTILITIES
+# -----------------------------------------------------
 
 ICON_NAMES = [
     "Gene Cards",
@@ -42,20 +42,15 @@ ICONS_DIR = Path(__file__).parent / "Icons"
 
 @st.cache_data
 def load_icons_b64():
-
     icon_map = {}
 
     for name in ICON_NAMES:
-
         fp = ICONS_DIR / f"{name}.png"
 
         if fp.is_file():
-
             with open(fp, "rb") as f:
                 b64 = base64.b64encode(f.read()).decode("utf-8")
-
-            icon_map[name] = f"data:image/png;base64,{b64}"
-
+                icon_map[name] = f"data:image/png;base64,{b64}"
         else:
             icon_map[name] = None
 
@@ -65,13 +60,8 @@ def load_icons_b64():
 ICON_B64 = load_icons_b64()
 
 
-# ---------------------------------------------------------
-# 3. KEGG FUNCTIONS
-# ---------------------------------------------------------
-
 @st.cache_data
 def get_all_kegg_pathways():
-
     k = KEGG()
 
     pathways_raw = k.list("pathway/hsa")
@@ -79,30 +69,28 @@ def get_all_kegg_pathways():
     pathways = {}
 
     for line in pathways_raw.strip().split("\n"):
+        parts = line.split("\t")
 
-        try:
-
-            pid, name_desc = line.split("\t")
-
-            name = name_desc.split(" - ")[0]
-
-            pathways[name] = pid.replace("path:", "")
-
-        except ValueError:
+        if len(parts) != 2:
             continue
+
+        pid, name_desc = parts
+
+        name = name_desc.split(" - ")[0]
+
+        pathways[name] = pid.replace("path:", "")
 
     return pathways
 
 
 @st.cache_data
-def get_genes_from_pathway(pathway_id):
+def get_genes_from_pathway(pathway_id: str):
 
     k = KEGG()
 
     genes = set()
 
     try:
-
         data = k.get(pathway_id)
 
         if not data:
@@ -142,20 +130,15 @@ def get_genes_from_pathway(pathway_id):
     except Exception as e:
 
         st.error(
-            f"Error retrieving pathway {pathway_id}: {e}"
+            f"Error parsing pathway {pathway_id}: {e}"
         )
 
         return set()
 
 
-# ---------------------------------------------------------
-# 4. GENE LINKS
-# ---------------------------------------------------------
-
-def generate_url_links(gene_name):
+def generate_url_links(gene_name: str):
 
     return {
-
         "GeneCards_URL":
             f"https://www.genecards.org/Search/Keyword?queryString={gene_name}",
 
@@ -167,11 +150,10 @@ def generate_url_links(gene_name):
 
         "GEO_URL":
             f"https://www.ncbi.nlm.nih.gov/gds/?term={gene_name}"
-
     }
 
 
-def generate_icon_links(gene_name):
+def generate_icon_links(gene_name: str):
 
     urls = {
 
@@ -186,7 +168,6 @@ def generate_icon_links(gene_name):
 
         "GEO":
             f"https://www.ncbi.nlm.nih.gov/gds/?term={gene_name}"
-
     }
 
     html = {}
@@ -214,11 +195,13 @@ def generate_icon_links(gene_name):
     return html
 
 
-# ---------------------------------------------------------
-# 5. PATHWAY CATEGORIES
-# ---------------------------------------------------------
+# -----------------------------------------------------
+# 3. SIDEBAR
+# -----------------------------------------------------
 
 all_paths = get_all_kegg_pathways()
+
+st.sidebar.header("Select Pathways for Comparison")
 
 
 CANCER_KEYWORDS = [
@@ -230,8 +213,7 @@ CANCER_KEYWORDS = [
     "gastric",
     "colorectal",
     "prostate",
-    "breast",
-    "renal cell"
+    "breast"
 ]
 
 
@@ -282,75 +264,149 @@ natural_options = {
 }
 
 
-# ---------------------------------------------------------
-# 6. SIDEBAR
-# ---------------------------------------------------------
+# -----------------------------------------------------
+# 4. EXAMPLE SELECTION
+# -----------------------------------------------------
 
-st.sidebar.header("Select Pathways")
+st.sidebar.markdown("---")
 
+st.sidebar.subheader("Load Examples")
+
+
+def set_example_state(simple=True):
+
+    if simple:
+
+        st.session_state.cancer_key = [
+            k
+            for k in cancer_options.keys()
+            if "Melanoma" in k
+        ]
+
+        st.session_state.chemo_key = [
+            k
+            for k in chemo_options.keys()
+            if "Platinum" in k
+        ]
+
+        st.session_state.natural_key = []
+
+    else:
+
+        st.session_state.cancer_key = [
+            k
+            for k in cancer_options.keys()
+            if k in [
+                "Melanoma",
+                "Renal cell carcinoma",
+                "Gastric cancer"
+            ]
+        ]
+
+        st.session_state.chemo_key = [
+            k
+            for k in chemo_options.keys()
+            if "Platinum" in k
+        ]
+
+        st.session_state.natural_key = [
+            k
+            for k in natural_options.keys()
+            if "cytochrome P450" in k
+        ]
+
+
+if "cancer_key" not in st.session_state:
+
+    st.session_state.cancer_key = [
+        k
+        for k in cancer_options.keys()
+        if k in [
+            "Melanoma",
+            "Renal cell carcinoma"
+        ]
+    ]
+
+
+if "chemo_key" not in st.session_state:
+
+    st.session_state.chemo_key = []
+
+
+if "natural_key" not in st.session_state:
+
+    st.session_state.natural_key = []
+
+
+st.sidebar.button(
+    "Load Simple Example",
+    on_click=set_example_state,
+    args=(True,)
+)
+
+
+st.sidebar.button(
+    "Load Complex Example",
+    on_click=set_example_state,
+    args=(False,)
+)
+
+
+st.sidebar.markdown("---")
+
+
+# -----------------------------------------------------
+# 5. PATHWAY SELECTION
+# -----------------------------------------------------
 
 st.sidebar.subheader("Cancer Pathways")
 
 sel_cancer = st.sidebar.multiselect(
     "Select cancer pathways:",
-    list(cancer_options.keys())
+    list(cancer_options.keys()),
+    key="cancer_key"
 )
 
 
-st.sidebar.subheader("Natural Product Pathways")
-
-sel_natural = st.sidebar.multiselect(
-    "Select natural product pathways:",
-    list(natural_options.keys())
-)
-
-
-st.sidebar.subheader("Pharmaceutical Pathways")
+st.sidebar.subheader("Therapeutic Pathways")
 
 sel_chemo = st.sidebar.multiselect(
     "Select pharmaceutical pathways:",
-    list(chemo_options.keys())
+    list(chemo_options.keys()),
+    key="chemo_key"
 )
+
+
+sel_natural = st.sidebar.multiselect(
+    "Select natural product pathways:",
+    list(natural_options.keys()),
+    key="natural_key"
+)
+
+
+combined_options = {
+    **cancer_options,
+    **chemo_options,
+    **natural_options
+}
 
 
 selected_pathways = (
     sel_cancer +
-    sel_natural +
-    sel_chemo
+    sel_chemo +
+    sel_natural
 )
 
 
-# ---------------------------------------------------------
-# 7. MAIN ANALYSIS
-# ---------------------------------------------------------
+# -----------------------------------------------------
+# 6. MAIN APP LOGIC
+# -----------------------------------------------------
 
 if selected_pathways:
 
-    # -----------------------------------------------------
-    # Fetch pathway genes
-    # -----------------------------------------------------
-
-    pathway_ids = {}
-
-    pathway_type = {}
-
-    for pathway in sel_cancer:
-
-        pathway_ids[pathway] = cancer_options[pathway]
-        pathway_type[pathway] = "cancer"
-
-
-    for pathway in sel_natural:
-
-        pathway_ids[pathway] = natural_options[pathway]
-        pathway_type[pathway] = "natural"
-
-
-    for pathway in sel_chemo:
-
-        pathway_ids[pathway] = chemo_options[pathway]
-        pathway_type[pathway] = "pharma"
-
+    # -------------------------------------------------
+    # 6A. FETCH PATHWAY DATA
+    # -------------------------------------------------
 
     p2g = {}
 
@@ -364,12 +420,11 @@ if selected_pathways:
 
                 executor.submit(
                     get_genes_from_pathway,
-                    pathway_ids[pathway]
+                    combined_options[pathway]
                 ): pathway
 
                 for pathway in selected_pathways
             }
-
 
             for future in concurrent.futures.as_completed(
                 future_to_pathway
@@ -377,16 +432,12 @@ if selected_pathways:
 
                 pathway = future_to_pathway[future]
 
-                try:
-                    p2g[pathway] = future.result()
-
-                except Exception:
-                    p2g[pathway] = set()
+                p2g[pathway] = future.result()
 
 
-    # -----------------------------------------------------
-    # Gene mapping
-    # -----------------------------------------------------
+    # -------------------------------------------------
+    # 6B. GENE MAPPING
+    # -------------------------------------------------
 
     flat_genes = [
         gene
@@ -397,79 +448,60 @@ if selected_pathways:
     gene_counts = Counter(flat_genes)
 
 
-    # Gene -> Cancer pathways
-
-    gene_to_cancers = {}
+    g2c = {}
 
     for gene in gene_counts:
 
-        gene_to_cancers[gene] = set()
+        g2c[gene] = set()
 
-        for cancer in sel_cancer:
+        for cancer_name in sel_cancer:
 
-            if gene in p2g.get(cancer, set()):
+            if gene in p2g.get(cancer_name, set()):
 
-                gene_to_cancers[gene].add(cancer)
-
-
-    # Gene -> Natural product pathways
-
-    gene_to_natural = {}
-
-    for gene in gene_counts:
-
-        gene_to_natural[gene] = set()
-
-        for pathway in sel_natural:
-
-            if gene in p2g.get(pathway, set()):
-
-                gene_to_natural[gene].add(pathway)
+                g2c[gene].add(cancer_name)
 
 
-    # Gene -> Pharmaceutical pathways
+    # -------------------------------------------------
+    # 6C. PATHWAY NETWORK
+    # -------------------------------------------------
 
-    gene_to_pharma = {}
+    st.header("Pathway-Gene Network")
 
-    for gene in gene_counts:
-
-        gene_to_pharma[gene] = set()
-
-        for pathway in sel_chemo:
-
-            if gene in p2g.get(pathway, set()):
-
-                gene_to_pharma[gene].add(pathway)
-
-
-    # -----------------------------------------------------
-    # 8. SUPER PATHWAY
-    # -----------------------------------------------------
-
-    st.header("🕸️ Super Pathway")
-
-    st.write(
-        "The Super Pathway combines the selected cancer, "
-        "natural product, and pharmaceutical pathways through "
-        "their shared genes."
+    st.info(
+        "The network represents pathway-gene associations among the "
+        "selected cancer, natural product, and pharmaceutical pathways. "
+        "Node position is determined by the network layout and should "
+        "not be interpreted as a quantitative measure of biological similarity."
     )
 
 
     G = nx.Graph()
 
 
-    # Add pathway nodes
+    for pathway in p2g:
 
-    for pathway in selected_pathways:
+        if pathway in sel_cancer:
+
+            pathway_type = "cancer"
+
+        elif pathway in sel_natural:
+
+            pathway_type = "natural"
+
+        elif pathway in sel_chemo:
+
+            pathway_type = "pharmaceutical"
+
+        else:
+
+            pathway_type = "pathway"
+
 
         G.add_node(
             pathway,
-            type="pathway",
-            pathway_type=pathway_type[pathway]
+            type=pathway_type
         )
 
-
-    # Add gene nodes
 
     for gene, count in gene_counts.items():
 
@@ -479,8 +511,6 @@ if selected_pathways:
             count=count
         )
 
-
-    # Add pathway-gene edges
 
     for pathway, genes in p2g.items():
 
@@ -492,324 +522,248 @@ if selected_pathways:
             )
 
 
-    # -----------------------------------------------------
-    # Cancer colors
-    # -----------------------------------------------------
-
-    cancer_colors = [
-
-        "crimson",
-        "royalblue",
-        "forestgreen",
-        "darkorange",
-        "purple",
-        "deeppink",
-        "brown",
-        "teal",
-        "goldenrod",
-        "darkcyan"
-
-    ]
-
-
-    cancer_color_map = {}
-
-    for i, cancer in enumerate(sel_cancer):
-
-        cancer_color_map[cancer] = (
-            cancer_colors[
-                i % len(cancer_colors)
-            ]
-        )
-
-
-    # -----------------------------------------------------
-    # Network layout
-    # -----------------------------------------------------
-
     pos = nx.spring_layout(
         G,
-        k=0.7,
+        k=0.5,
         seed=42
     )
 
 
-    # -----------------------------------------------------
-    # Edges
-    # -----------------------------------------------------
+    # -------------------------------------------------
+    # 6D. NETWORK EDGES
+    # -------------------------------------------------
 
     edge_x = []
     edge_y = []
+
 
     for u, v in G.edges():
 
         x0, y0 = pos[u]
         x1, y1 = pos[v]
 
-        edge_x.extend(
-            [x0, x1, None]
-        )
+        edge_x.extend([
+            x0,
+            x1,
+            None
+        ])
 
-        edge_y.extend(
-            [y0, y1, None]
-        )
+        edge_y.extend([
+            y0,
+            y1,
+            None
+        ])
 
 
     edge_trace = go.Scatter(
-
         x=edge_x,
         y=edge_y,
-
         mode="lines",
-
         line=dict(
-            color="#999",
+            color="#888",
             width=0.6
         ),
-
         hoverinfo="none"
-
     )
 
 
-    # -----------------------------------------------------
-    # Pathway nodes and gene nodes
-    # -----------------------------------------------------
+    # -------------------------------------------------
+    # 6E. CANCER COLORS
+    # -------------------------------------------------
 
-    pathway_x = []
-    pathway_y = []
-    pathway_text = []
-    pathway_color = []
-    pathway_symbol = []
+    cancer_colors = [
 
+        "#D62728",
+        "#1F77B4",
+        "#2CA02C",
+        "#9467BD",
+        "#FF7F0E",
+        "#17BECF",
+        "#8C564B",
+        "#E377C2"
+    ]
+
+
+    cancer_color_map = {
+
+        cancer_name:
+            cancer_colors[index % len(cancer_colors)]
+
+        for index, cancer_name
+        in enumerate(sel_cancer)
+    }
+
+
+    # -------------------------------------------------
+    # 6F. PATHWAY NODE TRACES
+    # -------------------------------------------------
+
+    pathway_traces = []
+
+
+    for pathway in p2g:
+
+        node_type = G.nodes[pathway]["type"]
+
+        x = pos[pathway][0]
+        y = pos[pathway][1]
+
+
+        if node_type == "cancer":
+
+            node_color = cancer_color_map[pathway]
+            node_symbol = "circle"
+
+        elif node_type == "natural":
+
+            node_color = "#228B22"
+            node_symbol = "square"
+
+        elif node_type == "pharmaceutical":
+
+            node_color = "#0000CD"
+            node_symbol = "square"
+
+        else:
+
+            node_color = "gray"
+            node_symbol = "circle"
+
+
+        pathway_trace = go.Scatter(
+
+            x=[x],
+            y=[y],
+
+            mode="markers+text",
+
+            text=[pathway],
+
+            textposition="top center",
+
+            marker=dict(
+
+                size=18,
+
+                color=node_color,
+
+                symbol=node_symbol,
+
+                line=dict(
+                    width=1.5,
+                    color="black"
+                )
+            ),
+
+            hovertemplate=(
+                "<b>%{text}</b>"
+                "<br>Pathway type: "
+                + node_type.capitalize()
+                + "<extra></extra>"
+            ),
+
+            showlegend=False
+        )
+
+
+        pathway_traces.append(
+            pathway_trace
+        )
+
+
+    # -------------------------------------------------
+    # 6G. GENE NODE CATEGORIES
+    # -------------------------------------------------
 
     gene_x = []
     gene_y = []
+
     gene_text = []
     gene_color = []
 
 
-    # -----------------------------------------------------
-    # Pathway nodes
-    # -----------------------------------------------------
-
-    for pathway in selected_pathways:
-
-        x, y = pos[pathway]
-
-        pathway_x.append(x)
-        pathway_y.append(y)
-
-        ptype = pathway_type[pathway]
-
-
-        if ptype == "cancer":
-
-            pathway_color.append(
-                cancer_color_map[pathway]
-            )
-
-            pathway_symbol.append(
-                "circle"
-            )
-
-            pathway_text.append(
-                f"{pathway}<br>"
-                f"Type: Cancer pathway"
-            )
-
-
-        elif ptype == "natural":
-
-            pathway_color.append(
-                "forestgreen"
-            )
-
-            pathway_symbol.append(
-                "square"
-            )
-
-            pathway_text.append(
-                f"{pathway}<br>"
-                f"Type: Natural product pathway"
-            )
-
-
-        elif ptype == "pharma":
-
-            pathway_color.append(
-                "mediumblue"
-            )
-
-            pathway_symbol.append(
-                "square"
-            )
-
-            pathway_text.append(
-                f"{pathway}<br>"
-                f"Type: Pharmaceutical pathway"
-            )
-
-
-    # -----------------------------------------------------
-    # Gene nodes
-    # -----------------------------------------------------
-
-    total_cancers = len(sel_cancer)
+    total_selected_cancers = len(
+        sel_cancer
+    )
 
 
     for gene in gene_counts:
 
-        x, y = pos[gene]
+        x = pos[gene][0]
+        y = pos[gene][1]
 
         gene_x.append(x)
         gene_y.append(y)
 
 
-        cancers = gene_to_cancers.get(
+        cancers_for_gene = g2c.get(
             gene,
             set()
         )
 
-        natural_paths = gene_to_natural.get(
-            gene,
-            set()
+        num_cancers = len(
+            cancers_for_gene
         )
 
-        pharma_paths = gene_to_pharma.get(
-            gene,
-            set()
-        )
-
-
-        cancer_names = ", ".join(
-            sorted(cancers)
-        )
-
-        natural_names = ", ".join(
-            sorted(natural_paths)
-        )
-
-        pharma_names = ", ".join(
-            sorted(pharma_paths)
-        )
-
-
-        # Gene coloring based on cancer membership
 
         if (
-            total_cancers > 1
-            and len(cancers) == total_cancers
+            total_selected_cancers > 1
+            and num_cancers == total_selected_cancers
         ):
 
-            gene_color.append(
-                "hotpink"
-            )
+            color = "hotpink"
 
-            cancer_status = (
-                f"Shared by ALL {total_cancers} cancers"
-            )
-
-
-        elif len(cancers) > 1:
-
-            gene_color.append(
-                "cyan"
-            )
-
-            cancer_status = (
-                f"Shared by {len(cancers)} cancers"
+            category = (
+                "Present in all selected cancer pathways"
             )
 
 
-        elif len(cancers) == 1:
+        elif (
+            1 < num_cancers
+            < total_selected_cancers
+        ):
 
-            cancer_color = cancer_color_map[
-                list(cancers)[0]
+            color = "cyan"
+
+            category = (
+                "Present in multiple selected cancer pathways"
+            )
+
+
+        elif num_cancers == 1:
+
+            cancer_name = list(
+                cancers_for_gene
+            )[0]
+
+            color = cancer_color_map[
+                cancer_name
             ]
 
-            gene_color.append(
-                cancer_color
-            )
-
-            cancer_status = (
-                f"Unique to {list(cancers)[0]}"
+            category = (
+                "Present in one selected cancer pathway: "
+                + cancer_name
             )
 
 
         else:
 
-            gene_color.append(
-                "lightgray"
+            color = "lightgray"
+
+            category = (
+                "Not present in the selected cancer pathways"
             )
 
-            cancer_status = (
-                "Not present in selected cancer pathways"
-            )
 
-
-        # Hover information
-
-        hover_text = (
-            f"<b>{gene}</b><br>"
-            f"{cancer_status}<br><br>"
-            f"<b>Cancer pathways:</b><br>"
-            f"{cancer_names if cancer_names else 'None'}<br><br>"
-            f"<b>Natural product pathways:</b><br>"
-            f"{natural_names if natural_names else 'None'}<br><br>"
-            f"<b>Pharmaceutical pathways:</b><br>"
-            f"{pharma_names if pharma_names else 'None'}"
+        gene_color.append(
+            color
         )
 
 
         gene_text.append(
-            hover_text
+            f"{gene}<br>{category}"
         )
 
-
-    # -----------------------------------------------------
-    # Pathway trace
-    # -----------------------------------------------------
-
-    pathway_trace = go.Scatter(
-
-        x=pathway_x,
-        y=pathway_y,
-
-        mode="markers+text",
-
-        marker=dict(
-
-            size=24,
-
-            color=pathway_color,
-
-            symbol=pathway_symbol,
-
-            line=dict(
-                width=2,
-                color="black"
-            )
-
-        ),
-
-        text=[
-            pathway
-            for pathway in selected_pathways
-        ],
-
-        textposition="top center",
-
-        hovertext=pathway_text,
-
-        hoverinfo="text"
-
-    )
-
-
-    # -----------------------------------------------------
-    # Gene trace
-    # -----------------------------------------------------
 
     gene_trace = go.Scatter(
 
@@ -820,7 +774,7 @@ if selected_pathways:
 
         marker=dict(
 
-            size=11,
+            size=10,
 
             color=gene_color,
 
@@ -828,36 +782,45 @@ if selected_pathways:
                 width=1,
                 color="black"
             )
-
         ),
 
         text=gene_text,
 
-        hoverinfo="text"
+        hoverinfo="text",
 
+        showlegend=False
     )
 
 
-    # -----------------------------------------------------
-    # Figure
-    # -----------------------------------------------------
+    # -------------------------------------------------
+    # 6H. FIGURE
+    # -------------------------------------------------
 
-    fig = go.Figure(
+    fig = go.Figure()
 
-        data=[
-            edge_trace,
-            pathway_trace,
-            gene_trace
-        ]
 
+    fig.add_trace(
+        edge_trace
+    )
+
+
+    for trace in pathway_traces:
+
+        fig.add_trace(
+            trace
+        )
+
+
+    fig.add_trace(
+        gene_trace
     )
 
 
     fig.update_layout(
 
         title=(
-            "Super Pathway: Cancer, Natural Product "
-            "and Pharmaceutical Pathways"
+            "Integrated Cancer, Natural Product, "
+            "and Pharmaceutical Pathway-Gene Network"
         ),
 
         xaxis=dict(
@@ -881,10 +844,9 @@ if selected_pathways:
 
         hovermode="closest",
 
-        height=750,
+        plot_bgcolor="white",
 
-        showlegend=False
-
+        height=750
     )
 
 
@@ -894,126 +856,157 @@ if selected_pathways:
     )
 
 
-    # -----------------------------------------------------
-    # 9. LEGEND
-    # -----------------------------------------------------
+    st.markdown("---")
+
+
+    # -------------------------------------------------
+    # 7. LEGEND
+    # -------------------------------------------------
 
     st.subheader("Legend")
 
+
     st.markdown(
         """
-        **Pathway nodes**
+        ### Pathway Nodes
 
-        ◯ Cancer pathways — each cancer has its own color
+        **Cancer pathways**  
+        Circular nodes represent selected cancer pathways. Each cancer
+        pathway is assigned a distinct color, which is also used to
+        identify genes specific to that cancer pathway.
 
-        ■ Natural product pathways — green square
+        **Natural product pathways**  
+        Green square nodes represent pathways associated with natural products.
 
-        ■ Pharmaceutical pathways — blue square
+        **Pharmaceutical pathways**  
+        Blue square nodes represent pharmaceutical or chemotherapy-related pathways.
 
-        **Gene nodes**
 
-        🩷 Shared by all selected cancers
+        ### Gene Nodes
 
-        🔵 Shared by some selected cancers
+        **Pink**  
+        Gene is present in **all selected cancer pathways**.
 
-        Colored gene — associated with one selected cancer
+        **Cyan**  
+        Gene is present in **more than one, but not all, selected cancer pathways**.
 
-        ⚪ Gene not present in selected cancer pathways
+        **Cancer-specific color**  
+        Gene is present in **only one selected cancer pathway**.
+        The gene color corresponds to the color assigned to that
+        cancer pathway.
+
+        **Light gray**  
+        Gene is **not present in any of the selected cancer pathways**.
+
+
+        ### Network Interpretation
+
+        **Pathway–gene edge**  
+        An edge connecting a pathway and a gene indicates that the gene
+        is associated with the corresponding pathway.
+
+        **Shared genes**  
+        Genes connected to multiple selected cancer pathways represent
+        common molecular components across those pathways.
+
+        **Cancer-specific genes**  
+        Genes connected to only one selected cancer pathway represent
+        pathway-specific gene associations within the selected analysis.
+
+        **Natural product and pharmaceutical connections**  
+        Connections between these pathway nodes and genes provide a
+        visual representation of their relationships within the
+        integrated pathway-gene network.
         """
     )
 
 
-    # -----------------------------------------------------
-    # 10. GENE ANALYSIS
-    # -----------------------------------------------------
-
     st.markdown("---")
 
-    st.header("📊 Gene Analysis")
+
+    # -------------------------------------------------
+    # 8. SHARED GENE ANALYSIS
+    # -------------------------------------------------
+
+    st.header("Shared Gene Analysis")
 
 
     gene_filter = st.text_input(
-        "Search for a gene (for example: TP53)"
+        "Search for a specific gene in the tables below "
+        "(e.g., TP53)"
     ).strip().upper()
 
 
     genes_all_cancers = sorted(
-
         [
             gene
-            for gene, cancers
-            in gene_to_cancers.items()
-
-            if total_cancers > 1
-            and len(cancers) == total_cancers
+            for gene, cancers in g2c.items()
+            if len(cancers) == total_selected_cancers
+            and total_selected_cancers > 1
         ]
-
     )
 
 
     genes_some_cancers = sorted(
-
         [
             gene
-            for gene, cancers
-            in gene_to_cancers.items()
-
-            if len(cancers) > 1
-            and len(cancers) < total_cancers
+            for gene, cancers in g2c.items()
+            if 1 < len(cancers) < total_selected_cancers
         ]
-
     )
 
 
     genes_one_cancer = sorted(
-
         [
             gene
-            for gene, cancers
-            in gene_to_cancers.items()
-
+            for gene, cancers in g2c.items()
             if len(cancers) == 1
         ]
-
     )
 
 
-    tabs = st.tabs(
-
+    analysis_tabs = st.tabs(
         [
-            "Shared by ALL Cancers",
-            "Shared by SOME Cancers",
-            "Unique to ONE Cancer"
+            "Genes in All Selected Cancer Pathways",
+            "Genes in Multiple Selected Cancer Pathways",
+            "Genes in One Selected Cancer Pathway"
         ]
-
     )
 
 
-    # -----------------------------------------------------
-    # ALL CANCERS
-    # -----------------------------------------------------
+    # -------------------------------------------------
+    # 8A. ALL CANCER PATHWAYS
+    # -------------------------------------------------
 
-    with tabs[0]:
+    with analysis_tabs[0]:
 
-        if total_cancers < 2:
+        st.subheader(
+            f"Genes present in all {total_selected_cancers} "
+            f"selected cancer pathways"
+        )
+
+
+        if total_selected_cancers <= 1:
 
             st.info(
                 "Select at least two cancer pathways "
-                "to compare shared cancer genes."
+                "to perform a shared-gene comparison."
             )
+
 
         elif not genes_all_cancers:
 
             st.warning(
-                "No genes were found to be common "
-                "to all selected cancer pathways."
+                "No genes were found to be common to all "
+                "selected cancer pathways."
             )
+
 
         else:
 
             st.write(
                 f"Found {len(genes_all_cancers)} genes "
-                f"common to all selected cancers."
+                "common to all selected cancer pathways."
             )
 
 
@@ -1024,95 +1017,96 @@ if selected_pathways:
 
                 row = {
 
-                    "Gene": gene,
+                    "Gene":
+                        gene,
 
-                    "Cancer Pathways":
+                    "Pathways":
                         ", ".join(
-                            sorted(
-                                gene_to_cancers[gene]
-                            )
+                            [
+                                name
+                                for name, genes
+                                in p2g.items()
+                                if gene in genes
+                            ]
                         ),
 
-                    "Natural Product Pathways":
-                        ", ".join(
-                            sorted(
-                                gene_to_natural.get(
-                                    gene,
-                                    set()
-                                )
-                            )
-                        ),
-
-                    "Pharmaceutical Pathways":
-                        ", ".join(
-                            sorted(
-                                gene_to_pharma.get(
-                                    gene,
-                                    set()
-                                )
-                            )
-                        ),
-
-                    **generate_icon_links(gene)
-
+                    **generate_icon_links(
+                        gene
+                    )
                 }
 
-                display_data.append(row)
+
+                display_data.append(
+                    row
+                )
 
 
-            df = pd.DataFrame(
+            df_display = pd.DataFrame(
                 display_data
+            ).sort_values(
+                by="Gene"
             )
 
 
             if gene_filter:
 
-                df = df[
-                    df["Gene"]
+                df_display = df_display[
+                    df_display["Gene"]
                     .str.upper()
-                    .str.contains(gene_filter)
+                    .str.contains(
+                        gene_filter
+                    )
                 ]
 
 
-            columns = [
-
+            cols_display = [
                 "Gene",
-                "Cancer Pathways",
-                "Natural Product Pathways",
-                "Pharmaceutical Pathways",
+                "Pathways",
                 "Gene Cards",
                 "NCBI",
                 "ENSEMBL",
                 "GEO"
-
             ]
 
 
             st.write(
-                df[columns]
-                .to_html(
+                df_display[
+                    cols_display
+                ].to_html(
                     escape=False,
                     index=False
                 ),
-
                 unsafe_allow_html=True
             )
 
 
-    # -----------------------------------------------------
-    # SOME CANCERS
-    # -----------------------------------------------------
+    # -------------------------------------------------
+    # 8B. MULTIPLE CANCER PATHWAYS
+    # -------------------------------------------------
 
-    with tabs[1]:
+    with analysis_tabs[1]:
+
+        st.subheader(
+            "Genes present in multiple, but not all, "
+            "selected cancer pathways"
+        )
+
 
         if not genes_some_cancers:
 
             st.info(
-                "No genes were found to be shared "
-                "by some but not all selected cancers."
+                "No genes were found to be shared by "
+                "multiple selected cancer pathways."
             )
 
+
         else:
+
+            st.write(
+                f"Found {len(genes_some_cancers)} genes "
+                "shared by multiple selected cancer pathways."
+            )
+
 
             display_data = []
 
@@ -1121,95 +1115,92 @@ if selected_pathways:
 
                 row = {
 
-                    "Gene": gene,
+                    "Gene":
+                        gene,
 
                     "Cancer Pathways":
                         ", ".join(
                             sorted(
-                                gene_to_cancers[gene]
+                                g2c[gene]
                             )
                         ),
 
-                    "Natural Product Pathways":
-                        ", ".join(
-                            sorted(
-                                gene_to_natural.get(
-                                    gene,
-                                    set()
-                                )
-                            )
-                        ),
-
-                    "Pharmaceutical Pathways":
-                        ", ".join(
-                            sorted(
-                                gene_to_pharma.get(
-                                    gene,
-                                    set()
-                                )
-                            )
-                        ),
-
-                    **generate_icon_links(gene)
-
+                    **generate_icon_links(
+                        gene
+                    )
                 }
 
-                display_data.append(row)
+
+                display_data.append(
+                    row
+                )
 
 
-            df = pd.DataFrame(
+            df_display = pd.DataFrame(
                 display_data
+            ).sort_values(
+                by="Gene"
             )
 
 
             if gene_filter:
 
-                df = df[
-                    df["Gene"]
+                df_display = df_display[
+                    df_display["Gene"]
                     .str.upper()
-                    .str.contains(gene_filter)
+                    .str.contains(
+                        gene_filter
+                    )
                 ]
 
 
-            columns = [
-
+            cols_display = [
                 "Gene",
                 "Cancer Pathways",
-                "Natural Product Pathways",
-                "Pharmaceutical Pathways",
                 "Gene Cards",
                 "NCBI",
                 "ENSEMBL",
                 "GEO"
-
             ]
 
 
             st.write(
-                df[columns]
-                .to_html(
+                df_display[
+                    cols_display
+                ].to_html(
                     escape=False,
                     index=False
                 ),
-
                 unsafe_allow_html=True
             )
 
 
-    # -----------------------------------------------------
-    # ONE CANCER
-    # -----------------------------------------------------
+    # -------------------------------------------------
+    # 8C. ONE CANCER PATHWAY
+    # -------------------------------------------------
 
-    with tabs[2]:
+    with analysis_tabs[2]:
+
+        st.subheader(
+            "Genes present in only one selected cancer pathway"
+        )
+
 
         if not genes_one_cancer:
 
             st.info(
-                "No genes were found to be unique "
-                "to a single selected cancer."
+                "No genes were found to be unique to "
+                "a single selected cancer pathway."
             )
 
+
         else:
+
+            st.write(
+                f"Found {len(genes_one_cancer)} genes "
+                "present in only one selected cancer pathway."
+            )
+
 
             display_data = []
 
@@ -1218,163 +1209,194 @@ if selected_pathways:
 
                 row = {
 
-                    "Gene": gene,
+                    "Gene":
+                        gene,
 
                     "Cancer Pathway":
                         list(
-                            gene_to_cancers[gene]
+                            g2c[gene]
                         )[0],
 
-                    "Natural Product Pathways":
-                        ", ".join(
-                            sorted(
-                                gene_to_natural.get(
-                                    gene,
-                                    set()
-                                )
-                            )
-                        ),
-
-                    "Pharmaceutical Pathways":
-                        ", ".join(
-                            sorted(
-                                gene_to_pharma.get(
-                                    gene,
-                                    set()
-                                )
-                            )
-                        ),
-
-                    **generate_icon_links(gene)
-
+                    **generate_icon_links(
+                        gene
+                    )
                 }
 
-                display_data.append(row)
+
+                display_data.append(
+                    row
+                )
 
 
-            df = pd.DataFrame(
+            df_display = pd.DataFrame(
                 display_data
+            ).sort_values(
+                by="Cancer Pathway"
             )
 
 
             if gene_filter:
 
-                df = df[
-                    df["Gene"]
+                df_display = df_display[
+                    df_display["Gene"]
                     .str.upper()
-                    .str.contains(gene_filter)
+                    .str.contains(
+                        gene_filter
+                    )
                 ]
 
 
-            columns = [
-
+            cols_display = [
                 "Gene",
                 "Cancer Pathway",
-                "Natural Product Pathways",
-                "Pharmaceutical Pathways",
                 "Gene Cards",
                 "NCBI",
                 "ENSEMBL",
                 "GEO"
-
             ]
 
 
             st.write(
-                df[columns]
-                .to_html(
+                df_display[
+                    cols_display
+                ].to_html(
                     escape=False,
                     index=False
                 ),
-
                 unsafe_allow_html=True
             )
 
 
-    # -----------------------------------------------------
-    # 11. DOWNLOAD DATA
-    # -----------------------------------------------------
+    # -------------------------------------------------
+    # 9. DOWNLOAD DATA
+    # -------------------------------------------------
 
     st.markdown("---")
 
-    st.subheader("📥 Download Gene Data")
+    st.subheader("Download Data")
 
 
-    download_data = []
+    if genes_all_cancers:
+
+        download_data = []
 
 
-    for gene in sorted(gene_counts):
+        for gene in genes_all_cancers:
 
-        row = {
+            row = {
 
-            "Gene Name": gene,
+                "Gene Name":
+                    gene,
 
-            "Cancer Pathways":
-                ", ".join(
-                    sorted(
-                        gene_to_cancers.get(
-                            gene,
-                            set()
+                "Pathways":
+                    ", ".join(
+                        [
+                            name
+                            for name, genes
+                            in p2g.items()
+                            if gene in genes
+                        ]
+                    ),
+
+                "Cancer Pathways":
+                    ", ".join(
+                        sorted(
+                            g2c[gene]
                         )
-                    )
-                ),
+                    ),
 
-            "Natural Product Pathways":
-                ", ".join(
-                    sorted(
-                        gene_to_natural.get(
-                            gene,
-                            set()
-                        )
-                    )
-                ),
+                "Frequency (All Selected Pathways)":
+                    gene_counts[gene],
 
-            "Pharmaceutical Pathways":
-                ", ".join(
-                    sorted(
-                        gene_to_pharma.get(
-                            gene,
-                            set()
-                        )
-                    )
-                ),
-
-            "Frequency":
-                gene_counts[gene],
-
-            **generate_url_links(gene)
-
-        }
-
-        download_data.append(row)
+                **generate_url_links(
+                    gene
+                )
+            }
 
 
-    df_download = pd.DataFrame(
-        download_data
-    )
+            download_data.append(
+                row
+            )
 
 
-    csv_string = df_download.to_csv(
-        index=False
-    ).encode("utf-8")
+        df_download = pd.DataFrame(
+            download_data
+        )
 
 
-    st.download_button(
+        column_order = [
 
-        label="Download Gene Data",
+            "Gene Name",
 
-        data=csv_string,
+            "Pathways",
 
-        file_name="super_pathway_gene_data.csv",
+            "Cancer Pathways",
 
-        mime="text/csv"
+            "Frequency (All Selected Pathways)",
 
-    )
+            "GeneCards_URL",
 
+            "NCBI_URL",
+
+            "ENSEMBL_URL",
+
+            "GEO_URL"
+        ]
+
+
+        df_download = (
+            df_download[
+                column_order
+            ]
+            .sort_values(
+                by="Gene Name"
+            )
+        )
+
+
+        csv_string = (
+            df_download
+            .to_csv(
+                index=False
+            )
+            .encode("utf-8")
+        )
+
+
+        st.download_button(
+
+            label=(
+                "Download Genes Present in All "
+                "Selected Cancer Pathways"
+            ),
+
+            data=csv_string,
+
+            file_name=(
+                "shared_genes_all_selected_cancers.csv"
+            ),
+
+            mime="text/csv",
+
+            key="dl_all_cancers"
+        )
+
+
+    else:
+
+        st.write(
+            "No genes present in all selected "
+            "cancer pathways are available for download."
+        )
+
+
+# -----------------------------------------------------
+# 10. NO PATHWAY SELECTED
+# -----------------------------------------------------
 
 else:
 
     st.info(
-        "☝️ Select at least one pathway from the sidebar "
-        "to build the Super Pathway."
+        "Please select at least one pathway from "
+        "the sidebar to begin."
     )
