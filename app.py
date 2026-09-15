@@ -7,6 +7,7 @@ from bioservices import KEGG
 import concurrent.futures
 import base64
 from pathlib import Path
+from html import escape
 
 
 # -----------------------------------------------------
@@ -62,6 +63,7 @@ ICON_B64 = load_icons_b64()
 
 @st.cache_data
 def get_all_kegg_pathways():
+
     k = KEGG()
 
     pathways_raw = k.list("pathway/hsa")
@@ -69,6 +71,7 @@ def get_all_kegg_pathways():
     pathways = {}
 
     for line in pathways_raw.strip().split("\n"):
+
         parts = line.split("\t")
 
         if len(parts) != 2:
@@ -91,6 +94,7 @@ def get_genes_from_pathway(pathway_id: str):
     genes = set()
 
     try:
+
         data = k.get(pathway_id)
 
         if not data:
@@ -701,6 +705,7 @@ if selected_pathways:
             set()
         )
 
+
         num_cancers = len(
             cancers_for_gene
         )
@@ -866,41 +871,219 @@ if selected_pathways:
     st.subheader("Legend")
 
 
+    # Cancer pathway legend
+    st.markdown("### Cancer Pathways")
+
+    st.markdown(
+        "Circular nodes represent selected cancer pathways. "
+        "Each cancer pathway has its own color. "
+        "The same color is used for genes that are present in only that cancer pathway."
+    )
+
+
+    for index, cancer_name in enumerate(
+        sel_cancer,
+        start=1
+    ):
+
+        cancer_name_html = escape(
+            cancer_name
+        )
+
+        cancer_color = cancer_color_map[
+            cancer_name
+        ]
+
+        st.markdown(
+            f"""
+            <div style="
+                display:flex;
+                align-items:center;
+                margin:8px 0;
+                font-size:16px;
+            ">
+                <span style="
+                    display:inline-block;
+                    width:14px;
+                    height:14px;
+                    background-color:{cancer_color};
+                    border:1px solid #333;
+                    border-radius:50%;
+                    margin-right:10px;
+                "></span>
+
+                <span>
+                    <b>{index}.</b>&nbsp; {cancer_name_html}
+                </span>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+
+
+    # Natural product pathway
+    st.markdown("### Natural Product Pathways")
+
     st.markdown(
         """
-        ### Pathway Nodes
+        <div style="
+            display:flex;
+            align-items:center;
+            margin:8px 0;
+            font-size:16px;
+        ">
+            <span style="
+                display:inline-block;
+                width:14px;
+                height:14px;
+                background-color:#228B22;
+                border:1px solid #333;
+                margin-right:10px;
+            "></span>
 
-        **Cancer pathways**  
-        Circular nodes represent selected cancer pathways. Each cancer
-        pathway is assigned a distinct color, which is also used to
-        identify genes specific to that cancer pathway.
-
-        **Natural product pathways**  
-        Green square nodes represent pathways associated with natural products.
-
-        **Pharmaceutical pathways**  
-        Blue square nodes represent pharmaceutical or chemotherapy-related pathways.
-
-
-        ### Gene Nodes
-
-        **Pink**  
-        Gene is present in **all selected cancer pathways**.
-
-        **Cyan**  
-        Gene is present in **more than one, but not all, selected cancer pathways**.
-
-        **Cancer-specific color**  
-        Gene is present in **only one selected cancer pathway**.
-        The gene color corresponds to the color assigned to that
-        cancer pathway.
-
-        **Light gray**  
-        Gene is **not present in any of the selected cancer pathways**.
+            <span>
+                Natural product pathways
+            </span>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
 
 
-        ### Network Interpretation
+    # Pharmaceutical pathway
+    st.markdown("### Pharmaceutical Pathways")
 
+    st.markdown(
+        """
+        <div style="
+            display:flex;
+            align-items:center;
+            margin:8px 0;
+            font-size:16px;
+        ">
+            <span style="
+                display:inline-block;
+                width:14px;
+                height:14px;
+                background-color:#0000CD;
+                border:1px solid #333;
+                margin-right:10px;
+            "></span>
+
+            <span>
+                Pharmaceutical pathways
+            </span>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
+
+    # Gene nodes
+    st.markdown("### Gene Nodes")
+
+
+    st.markdown(
+        """
+        <div style="
+            display:flex;
+            align-items:center;
+            margin:8px 0;
+            font-size:16px;
+        ">
+            <span style="
+                display:inline-block;
+                width:14px;
+                height:14px;
+                background-color:hotpink;
+                border:1px solid #333;
+                border-radius:50%;
+                margin-right:10px;
+            "></span>
+
+            <span>
+                Gene present in all selected cancer pathways
+            </span>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
+
+    st.markdown(
+        """
+        <div style="
+            display:flex;
+            align-items:center;
+            margin:8px 0;
+            font-size:16px;
+        ">
+            <span style="
+                display:inline-block;
+                width:14px;
+                height:14px;
+                background-color:cyan;
+                border:1px solid #333;
+                border-radius:50%;
+                margin-right:10px;
+            "></span>
+
+            <span>
+                Gene present in multiple, but not all, selected cancer pathways
+            </span>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
+
+    st.markdown(
+        """
+        <div style="
+            margin:8px 0;
+            font-size:16px;
+        ">
+            <b>Cancer-specific genes:</b>
+            genes present in only one selected cancer pathway use
+            the same color as that cancer pathway shown above.
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
+
+    st.markdown(
+        """
+        <div style="
+            display:flex;
+            align-items:center;
+            margin:8px 0;
+            font-size:16px;
+        ">
+            <span style="
+                display:inline-block;
+                width:14px;
+                height:14px;
+                background-color:lightgray;
+                border:1px solid #333;
+                border-radius:50%;
+                margin-right:10px;
+            "></span>
+
+            <span>
+                Gene not present in any selected cancer pathway
+            </span>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
+
+    # Network interpretation
+    st.markdown("### Network Interpretation")
+
+    st.markdown(
+        """
         **Pathway–gene edge**  
         An edge connecting a pathway and a gene indicates that the gene
         is associated with the corresponding pathway.
