@@ -217,21 +217,80 @@ CANCER_KEYWORDS = [
 ]
 
 
-CHEMO_KEYWORDS = [
-    "fluoropyrimidine",
-    "folate",
-    "platinum"
-]
+CHEMOTHERAPY_PATHWAYS = {
+    "Platinum drug resistance": "hsa01524",
+    "Antifolate resistance": "hsa01523",
+    "EGFR tyrosine kinase inhibitor resistance": "hsa01521",
+    "Pathways in cancer": "hsa05200",
+    "Transcriptional misregulation in cancer": "hsa05202",
+    "Chemical carcinogenesis - DNA adducts": "hsa05204",
+    "Chemical carcinogenesis - reactive oxygen species": "hsa05208",
+    "Chemical carcinogenesis - receptor activation": "hsa05207",
+    "Base excision repair": "hsa03410",
+    "Nucleotide excision repair": "hsa03420",
+    "Mismatch repair": "hsa03430",
+    "Homologous recombination": "hsa03440",
+    "Non-homologous end-joining": "hsa03450",
+    "p53 signaling pathway": "hsa04115",
+    "Apoptosis": "hsa04210",
+    "Cell cycle": "hsa04110",
+    "Oocyte meiosis": "hsa04114",
+    "DNA replication": "hsa03030",
+    "Pyrimidine metabolism": "hsa00240",
+    "Purine metabolism": "hsa00230",
+    "One carbon pool by folate": "hsa00670",
+    "Folate biosynthesis": "hsa00790",
+    "Drug metabolism - cytochrome P450": "hsa00982",
+    "Drug metabolism - other enzymes": "hsa00983",
+    "Glutathione metabolism": "hsa00480",
+    "Autophagy - animal": "hsa04140",
+    "MAPK signaling pathway": "hsa04010",
+    "NF-kappa B signaling pathway": "hsa04064",
+    "HIF-1 signaling pathway": "hsa04066",
+    "PI3K-Akt signaling pathway": "hsa04151",
+    "TGF-beta signaling pathway": "hsa04350",
+    "Rap1 signaling pathway": "hsa04015",
+    "TNF signaling pathway": "hsa04668",
+    "Ras signaling pathway": "hsa04014",
+    "Central carbon metabolism in cancer": "hsa05230",
+    "Choline metabolism in cancer": "hsa05231"
+}
 
 
-NATURAL_PRODUCT_KEYWORDS = [
-    "metabolism of xenobiotics by cytochrome p450",
-    "drug metabolism - cytochrome p450",
-    "drug metabolism - other enzymes",
-    "steroid hormone biosynthesis",
-    "retinol metabolism",
-    "metabolism"
-]
+NATURAL_PRODUCT_PATHWAYS = {
+    "DNA replication": "hsa03030",
+    "Cell cycle": "hsa04110",
+    "p53 signaling pathway": "hsa04115",
+    "Apoptosis": "hsa04210",
+    "Autophagy - animal": "hsa04140",
+    "mTOR signaling pathway": "hsa04150",
+    "PI3K-Akt signaling pathway": "hsa04151",
+    "MAPK signaling pathway": "hsa04010",
+    "Ras signaling pathway": "hsa04014",
+    "NF-kappa B signaling pathway": "hsa04064",
+    "Wnt signaling pathway": "hsa04310",
+    "Notch signaling pathway": "hsa04330",
+    "Hedgehog signaling pathway": "hsa04340",
+    "TGF-beta signaling pathway": "hsa04350",
+    "HIF-1 signaling pathway": "hsa04066",
+    "VEGF signaling pathway": "hsa04370",
+    "Base excision repair": "hsa03410",
+    "Nucleotide excision repair": "hsa03420",
+    "Mismatch repair": "hsa03430",
+    "Homologous recombination": "hsa03440",
+    "Non-homologous end-joining": "hsa03450",
+    "Fanconi anemia pathway": "hsa03460",
+    "Pathways in cancer": "hsa05200",
+    "Transcriptional misregulation in cancer": "hsa05202",
+    "Chemical carcinogenesis - DNA adducts": "hsa05204",
+    "Proteoglycans in cancer": "hsa05205",
+    "MicroRNAs in cancer": "hsa05206",
+    "Chemical carcinogenesis - receptor activation": "hsa05207",
+    "Chemical carcinogenesis - reactive oxygen species": "hsa05208",
+    "Central carbon metabolism in cancer": "hsa05230",
+    "Choline metabolism in cancer": "hsa05231",
+    "PD-L1 expression and PD-1 checkpoint pathway in cancer": "hsa05235"
+}
 
 
 cancer_options = {
@@ -244,24 +303,10 @@ cancer_options = {
 }
 
 
-chemo_options = {
-    name: pid
-    for name, pid in all_paths.items()
-    if any(
-        keyword in name.lower()
-        for keyword in CHEMO_KEYWORDS
-    )
-}
+chemo_options = CHEMOTHERAPY_PATHWAYS
 
 
-natural_options = {
-    name: pid
-    for name, pid in all_paths.items()
-    if any(
-        keyword in name.lower()
-        for keyword in NATURAL_PRODUCT_KEYWORDS
-    )
-}
+natural_options = NATURAL_PRODUCT_PATHWAYS
 
 
 # -----------------------------------------------------
