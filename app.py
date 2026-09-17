@@ -409,6 +409,9 @@ st.sidebar.subheader("Cancer Pathways")
 sel_cancer = st.sidebar.multiselect(
     "Select cancer pathways:",
     list(cancer_options.keys()),
+    format_func=lambda name: (
+        f"{name} ({cancer_options[name]})"
+    ),
     key="cancer_key"
 )
 
@@ -418,6 +421,9 @@ st.sidebar.subheader("Therapeutic Pathways")
 sel_chemo = st.sidebar.multiselect(
     "Select pharmaceutical pathways:",
     list(chemo_options.keys()),
+    format_func=lambda name: (
+        f"{name} ({chemo_options[name]})"
+    ),
     key="chemo_key"
 )
 
@@ -425,6 +431,9 @@ sel_chemo = st.sidebar.multiselect(
 sel_natural = st.sidebar.multiselect(
     "Select natural product pathways:",
     list(natural_options.keys()),
+    format_func=lambda name: (
+        f"{name} ({natural_options[name]})"
+    ),
     key="natural_key"
 )
 
@@ -702,7 +711,9 @@ if selected_pathways:
 
             hovertemplate=(
                 "<b>%{text}</b>"
-                "<br>Pathway type: "
+                "<br>KEGG ID: "
+                + combined_options[pathway]
+                + "<br>Pathway type: "
                 + node_type.capitalize()
                 + "<extra></extra>"
             ),
