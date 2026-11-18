@@ -93,8 +93,8 @@ def get_genes_from_pathway(pathway_id: str):
     try:
         data = k.get(pathway_id)
 
-        if not data:
-            return set()
+        if not isinstance(data, str) or not data.strip():
+            raise ValueError("KEGG returned no pathway record")
 
         parsed = k.parse(data)
 
@@ -128,12 +128,7 @@ def get_genes_from_pathway(pathway_id: str):
         return genes
 
     except Exception as e:
-
-        st.error(
-            f"Error parsing pathway {pathway_id}: {e}"
-        )
-
-        return set()
+        raise RuntimeError(f"Cannot retrieve or parse pathway {pathway_id}: {e}") from e
 
 
 def generate_url_links(gene_name: str):
@@ -266,23 +261,37 @@ def load_natural_products():
     from io import StringIO
     return pd.read_csv(StringIO(NATURAL_PRODUCTS_CSV)).fillna("")
 
+def parse_human_gene_catalog(raw):
+    """KEGG organism lists have ID, gene type, position, and description columns.
+    Legacy two-column lists are accepted. Only parse the final description column.
+    """
+    import re
+    lookup = {}
+    primary = {}
+    if not isinstance(raw, str):
+        raise ValueError("Human gene catalog unavailable")
+    for line in raw.splitlines():
+        fields = line.split("\t")
+        if len(fields) not in (2, 4) or not re.fullmatch(r"hsa:\d+", fields[0]):
+            continue
+        description = fields[-1]
+        if ";" not in description:
+            continue
+        names = [v.strip() for v in description.split(";", 1)[0].split(",")]
+        if not names or not re.fullmatch(r"[A-Za-z0-9_.-]+", names[0]):
+            continue
+        primary.setdefault(names[0].casefold(), set()).add(names[0])
+        for name in names:
+            if re.fullmatch(r"[A-Za-z0-9_.-]+", name):
+                lookup.setdefault(name.casefold(), set()).add(names[0])
+    lookup.update(primary)  # Primary symbols take precedence over historical aliases.
+    if not lookup:
+        raise ValueError("No valid human gene symbols parsed; comparison disabled")
+    return lookup
+
 @st.cache_data(ttl=86400)
 def human_gene_lookup():
-    """Match names against the human KEGG gene catalog; no family expansion."""
-    raw = KEGG().list("hsa")
-    if not isinstance(raw, str) or "\t" not in raw:
-        raise ValueError("Human gene catalog unavailable")
-    lookup = {}
-    for line in raw.splitlines():
-        if "\t" not in line:
-            continue
-        _, description = line.split("\t", 1)
-        names = [v.strip() for v in description.split(";", 1)[0].split(",")]
-        if not names or not names[0]:
-            continue
-        for name in names:
-            lookup.setdefault(name.casefold(), set()).add(names[0])
-    return lookup
+    return parse_human_gene_catalog(KEGG().list("hsa"))
 
 # Explicit name normalization only; this does not verify biological effects.
 TARGET_ALIASES = {
@@ -303,11 +312,49 @@ def resolve_targets(text, lookup):
         token = token.strip()
         name = re.sub(r"\s*\([^)]*\)", "", token).strip()
         candidate = TARGET_ALIASES.get(name.casefold(), name)
-        matches = lookup.get(candidate.casefold(), set())
+        # Family/complex names must not be collapsed to an arbitrary catalog alias.
+        ambiguous = {"nf-kappab", "nf-kappab", "nf-kb", "nf-κb", "ampk", "akt", "pi3k",
+                     "hsp90", "hsp70", "pfk1", "dnmts", "vegfr", "acc", "acat",
+                     "sod", "hdacs", "beta-tubulin", "dna topoisomerase ii"}
+        matches = set() if name.casefold() in ambiguous else lookup.get(candidate.casefold(), set())
         symbol = next(iter(matches)) if len(matches) == 1 else ""
         rows.append({"Reported target": token, "Gene": symbol,
-                     "Mapping status": "Name matched; association unverified" if symbol
+                     "Mapping status": "Gene name matched (not evidence of compound activity)" if symbol
                      else "Unresolved: manual review required"})
+    return rows
+
+# Literature audit: primary-source abstracts/publisher record checked for these five claims.
+# Support is experimental and context-specific, not clinical efficacy or direct binding.
+CURCUMIN_EVIDENCE = {
+    "HK2": {"Evidence status": "Supported: cancer cell study", "Cancer/model": "HCT116 and HT29 colorectal cancer cells",
+        "Finding": "Reduced HKII expression/activity and mitochondrial dissociation reported",
+        "Reference": "https://pubmed.ncbi.nlm.nih.gov/25229889/", "DOI": "10.1097/CAD.0000000000000132",
+        "Review scope": "Primary research abstract checked; full-text/quality audit pending", "Eligible": True},
+    "FASN": {"Evidence status": "Supported: cancer cell study", "Cancer/model": "MDA-MB-231 breast cancer cells",
+        "Finding": "Reduced FAS activity, expression and mRNA; apoptosis reported",
+        "Reference": "https://pubmed.ncbi.nlm.nih.gov/26985864/", "DOI": "10.3892/or.2016.4682",
+        "Review scope": "Primary research abstract checked; full-text/quality audit pending", "Eligible": True},
+    "STAT3": {"Evidence status": "Supported: cancer cell study", "Cancer/model": "Hodgkin lymphoma cell models",
+        "Finding": "Suppression of STAT3 activation reported; direct binding not established here",
+        "Reference": "https://pubmed.ncbi.nlm.nih.gov/18386790/", "DOI": "10.1002/ijc.23477",
+        "Review scope": "Primary research abstract checked; full-text/quality audit pending", "Eligible": True},
+    "NF-kappaB": {"Evidence status": "Supported signaling effect; gene identity unresolved", "Cancer/model": "Hodgkin lymphoma cell models",
+        "Finding": "Suppression of NF-kappaB activation reported; family/complex not assigned to one gene",
+        "Reference": "https://pubmed.ncbi.nlm.nih.gov/18386790/", "DOI": "10.1002/ijc.23477",
+        "Review scope": "Primary research abstract checked; full-text/quality audit pending", "Eligible": False},
+    "ACLY": {"Evidence status": "Context mismatch: cancer-specific claim not established by checked source",
+        "Cancer/model": "NAFLD models; primary mouse hepatocytes, mice, HepG2/HEK293T and recombinant ACLY",
+        "Finding": "Citrate metabolism/lipid effects studied for fatty liver disease; not validation of an anticancer ACLY mechanism",
+        "Reference": "https://doi.org/10.1021/acs.jafc.1c03105", "DOI": "10.1021/acs.jafc.1c03105",
+        "Review scope": "Primary publisher abstract checked; full-text/quality audit pending", "Eligible": False},
+}
+
+def annotate_evidence(compound, rows):
+    for row in rows:
+        evidence = CURCUMIN_EVIDENCE.get(row["Reported target"]) if compound == "Curcumin" else None
+        row.update(evidence or {"Evidence status": "Pending: association not yet reviewed", "Cancer/model": "",
+            "Finding": "Supplied dataset claim only", "Reference": "", "DOI": "",
+            "Review scope": "Not reviewed", "Eligible": False})
     return rows
 
 natural_df = load_natural_products()
@@ -481,10 +528,12 @@ selected_pathways = (
 # -----------------------------------------------------
 
 target_tables = {}
+include_pending = st.sidebar.checkbox("Include mapped associations awaiting cancer-evidence review", value=False,
+    help="Default comparisons use only currently reviewed cancer-cell associations. This is not clinical validation.")
 if sel_natural:
     st.header("Natural compound details")
-    st.caption("Reported associations from the supplied dataset. Molecular effects, direct binding, "
-               "and clinical effectiveness have not been verified. Pathway membership is not a compound target claim.")
+    st.caption("Reported associations from the supplied dataset, with a limited Curcumin evidence audit. "
+               "Direct binding and clinical effectiveness are not established by these comparisons. Pathway membership is not a compound target claim.")
     try:
         lookup = human_gene_lookup()
     except Exception as exc:
@@ -492,18 +541,27 @@ if sel_natural:
         st.error(f"Cannot load the human gene catalog: {exc}. Target comparisons are unavailable; retry later.")
     for compound in sel_natural:
         record = natural_records[compound]
-        target_tables[compound] = resolve_targets(record["Primary_Molecular_Targets"], lookup)
+        target_tables[compound] = annotate_evidence(compound, resolve_targets(record["Primary_Molecular_Targets"], lookup))
         with st.expander(compound, expanded=True):
             st.write("Source:", record["Source_Organism"])
             st.write("Chemical class:", record["Chemical_Class"])
-            st.write("Reported mechanism:", record["Mechanism_of_Action"])
+            st.write("Original supplied mechanism (not fully verified):", record["Mechanism_of_Action"])
+            if compound == "Curcumin":
+                st.info("Evidence audit: HK2, FASN and STAT3 effects are supported by cancer-cell studies. "
+                        "NF-kappaB is retained as a signaling effect, not one gene. "
+                        "The checked ACLY study concerns fatty liver disease; the anticancer ACLY claim remains unestablished. "
+                        "These studies do not establish oral treatment effectiveness or melanoma-specific activity.")
             st.write("Reported pathway category:", record["Pathway_Category"])
             for pid in __import__("re").findall(r"hsa\d{5}", record["KEGG_Pathway_ID"]):
                 st.markdown(f"Associated pathway: [{pid}](https://www.kegg.jp/pathway/{pid})")
-            st.dataframe(pd.DataFrame(target_tables[compound]), use_container_width=True)
-            st.caption("Reference status: general bibliography supplied; row-level supporting references pending.")
+            display_targets = pd.DataFrame(target_tables[compound]).drop(columns=["Eligible"])
+            st.dataframe(display_targets, use_container_width=True)
+            for evidence in target_tables[compound]:
+                if evidence["Reference"]:
+                    st.markdown(f"{evidence['Reported target']}: [supporting source]({evidence['Reference']}) — {evidence['Evidence status']}")
+            st.caption("Evidence audit currently covers Curcumin only. Other entries remain pending. Gene-name matching and biological evidence are separate checks.")
     details = natural_df[natural_df["Compound"].isin(sel_natural)].copy()
-    details["Verification_Status"] = "Unverified supplied association"
+    details["Verification_Status"] = details["Compound"].map(lambda c: "Partial primary-abstract audit; see target evidence export" if c == "Curcumin" else "Unreviewed supplied associations")
     st.download_button("Download selected compound details", details.to_csv(index=False).encode(),
                        "selected_compound_details.csv", "text/csv")
     with st.expander("Starting bibliography (not row-level verification)"):
@@ -546,11 +604,19 @@ if selected_pathways:
 
                 pathway = future_to_pathway[future]
 
-                p2g[pathway] = future.result()
+                try:
+                    p2g[pathway] = future.result()
+                except Exception as exc:
+                    st.error(f"Pathway data unavailable: {exc}. Comparison stopped to avoid misleading zero overlaps.")
+                    st.stop()
 
 
     for compound in sel_natural:
-        p2g[compound] = {row["Gene"] for row in target_tables[compound] if row["Gene"]}
+        p2g[compound] = {row["Gene"] for row in target_tables[compound]
+                         if row["Gene"] and (include_pending or row["Eligible"])}
+        if not p2g[compound]:
+            st.warning(f"{compound}: no eligible resolved targets under the current evidence filter. "
+                       "An empty comparison does not establish absence of biological overlap.")
 
     if sel_natural:
         st.header("Compound targets shared with cancer pathways")
@@ -559,9 +625,11 @@ if selected_pathways:
             for cancer in sel_cancer:
                 shared = sorted(p2g[compound] & p2g.get(cancer, set()))
                 comparison.append({"Compound": compound, "Cancer pathway": cancer,
-                    "Matched reported targets": len(p2g[compound]), "Shared target count": len(shared),
+                    "Matched reported targets": len(p2g[compound]), "Shared target count": len(shared) if p2g[compound] else None,
                     "Shared genes": ", ".join(shared),
-                    "Status": "Unverified associations; overlap is descriptive"})
+                    "Status": ("No eligible targets; overlap unavailable" if not p2g[compound]
+                               else "Descriptive overlap; pending associations included" if include_pending
+                               else "Descriptive overlap of reviewed cell-study associations; cancer contexts may differ")})
         if comparison:
             comparison_df = pd.DataFrame(comparison)
             st.dataframe(comparison_df, use_container_width=True)
